@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# 开启 strict 模式，遇到错误立刻停止脚本
 set -e
 
 # 1. 检查环境变量 tunnelid 是否存在
@@ -9,25 +8,9 @@ if [ -z "$tunnelid" ]; then
   exit 1
 fi
 
-echo "[INFO] 环境变量加载成功，准备启动服务..."
+echo "[INFO] 环境变量加载成功，准备启动 Supervisord 进行进程守护..."
 
-# 2. 启动 loftgw (放在后台)
-echo "[INFO] 启动 loftgw..."
-./loftgw &
-LOFTGW_PID=$!
-
-# 3. 启动 cloudflared (放在后台，使用正确的前台运行参数)
-echo "[INFO] 启动 cloudflared tunnel..."
-./cloudflared tunnel --no-autoupdate run --token "$tunnelid" &
-CLOUDFLARED_PID=$!
-
-# 4. 捕获容器的关闭信号 (SIGTERM/SIGINT)，优雅地关闭子进程
-trap "echo '[INFO] 收到停止信号，正在关闭服务...'; kill -TERM $LOFTGW_PID $CLOUDFLARED_PID; wait $LOFTGW_PID $CLOUDFLARED_PID" SIGTERM SIGINT
-
-# 5. 关键点：等待任意一个后台进程退出
-# 如果 loftgw 或 cloudflared 意外崩溃，wait -n 会立刻解除阻塞
-wait -n
-
-# 6. 一旦解除阻塞，说明有服务挂了，退出脚本，让 Northflank 重启容器
-echo "[ERROR] 其中一个服务已经意外退出，正在结束容器以触发重启机制。"
-exit 1
+# 2. 使用 exec 启动 supervisord。
+# exec 的作用是让 supervisord 替代当前 shell 成为 PID 1 进程。
+# 这样当 Northflank 发送停止信号时，supervisord 能直接收到并优雅关闭它底下的 2 个子进程。
+exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
