@@ -25,6 +25,6 @@ COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 # 暴露可能需要的端口
-EXPOSE 8080
+EXPOSE 8000
 
 ENTRYPOINT ["/app/entrypoint.sh"]
