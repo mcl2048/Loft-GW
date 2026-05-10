@@ -2,7 +2,7 @@
 
 # ==============================================================================
 # 脚本说明: 从 GitHub 克隆 Loft-Gateway 仓库并推送到 Clever Cloud
-# 质量保证: 生产级别 (启用 Strict Mode, 阅后即焚 SSH 密钥, 强制安全权限, 自动清理机制)
+# 质量保证: 生产级别 (启用 Strict Mode, 流程优化：先配密钥后输配置, 自动清理机制)
 # ==============================================================================
 
 set -euo pipefail
@@ -36,34 +36,18 @@ main() {
     echo -e "准备部署项目到 Clever Cloud"
     echo -e "\033[1;36m===================================================\033[0m"
     
-    # 1. 收集 Clever Cloud Git 地址
-    read -r -p "请输入 Clever Cloud 的 Git SSH 地址 (例如: git@push-n3...): " CLEVER_GIT_URL
-    if [[ -z "${CLEVER_GIT_URL// /}" ]]; then
-        log_error "Git 地址不能为空，脚本已终止。"
-        exit 1
-    fi
-    CLEVER_GIT_URL="${CLEVER_GIT_URL#git+ssh://}"
-
-    # 2. 收集 GitHub 鉴权信息
-    echo -e "\n\033[1;33m[关于 GitHub 仓库的读取权限]\033[0m"
-    echo "如果你在 Codespaces 中运行，且目标仓库是公开的，请直接按回车；"
-    echo "如果目标仓库是私有的，请输入你的 GitHub PAT (Personal Access Token)。"
-    read -r -s -p "GitHub PAT (选填): " GITHUB_PAT
-    echo -e "\n"
-
-    # 3. 安全创建临时目录
+    # 1. 安全创建临时目录 (必须先创建，用来存放即将生成的临时 SSH 密钥)
     TEMP_DIR=$(mktemp -d -t loft-gateway-deploy-XXXXXX)
     log_info "已创建安全的临时工作目录: ${TEMP_DIR}"
 
-    # 4. 生成阅后即焚的临时 SSH 密钥
+    # 2. 优先生成阅后即焚的临时 SSH 密钥
     local ssh_key_path="${TEMP_DIR}/cc_temp_ed25519"
     log_info "正在生成临时的部署 SSH 密钥..."
     ssh-keygen -t ed25519 -C "clever-deploy-temp" -f "${ssh_key_path}" -q -N ""
+    # 强制收缩私钥权限，满足 SSH 客户端的安全要求
+    chmod 600 "${ssh_key_path}" 
 
-    # 【核心修复点】：强制收缩私钥权限，满足 SSH 客户端的安全要求 (仅属主可读写)
-    chmod 600 "${ssh_key_path}"
-
-    echo -e "\n\033[1;35m>>>>>>>>>> [ 等待操作: 绑定 SSH Key ] >>>>>>>>>>\033[0m"
+    echo -e "\n\033[1;35m>>>>>>>>>> [ 步骤 1/3: 绑定 SSH Key ] >>>>>>>>>>\033[0m"
     echo "请将以下公钥内容完整复制，并添加到 Clever Cloud 的 SSH Keys 设置中："
     echo "------------------------------------------------------------------"
     echo -e "\033[1;32m$(cat "${ssh_key_path}.pub")\033[0m"
@@ -71,6 +55,22 @@ main() {
     echo -e "\033[1;35m<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<\033[0m\n"
     
     read -r -p "确认已在 Clever Cloud 绑定好公钥后，请按回车键 (Enter) 继续..."
+
+    # 3. 收集 Clever Cloud Git 地址
+    echo -e "\n\033[1;35m>>>>>>>>>> [ 步骤 2/3: 配置 Clever Cloud 地址 ] >>>>>>>>>>\033[0m"
+    read -r -p "请输入 Clever Cloud 的 Git SSH 地址 (例如: git@push-n3...): " CLEVER_GIT_URL
+    if [[ -z "${CLEVER_GIT_URL// /}" ]]; then
+        log_error "Git 地址不能为空，脚本已终止。"
+        exit 1
+    fi
+    CLEVER_GIT_URL="${CLEVER_GIT_URL#git+ssh://}"
+
+    # 4. 收集 GitHub 鉴权信息
+    echo -e "\n\033[1;35m>>>>>>>>>> [ 步骤 3/3: 配置 GitHub 鉴权 ] >>>>>>>>>>\033[0m"
+    echo "如果你在 Codespaces 中运行，且目标仓库是公开的，请直接按回车；"
+    echo "如果目标仓库是私有的，请输入你的 GitHub PAT (Personal Access Token)。"
+    read -r -s -p "GitHub PAT (选填): " GITHUB_PAT
+    echo -e "\n"
 
     # 5. 根据输入构造克隆命令
     log_info "正在从 GitHub 克隆代码..."
