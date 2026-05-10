@@ -9,7 +9,7 @@
 set -euo pipefail
 
 # --- 配置项 ---
-SOURCE_REPO="https://github.com/mcl2048/Loft-Gateway.git"
+SOURCE_REPO="https://github.com/mcl2048/Loft-GW.git"
 REMOTE_PREFIX="git+ssh://"
 TEMP_DIR=""
 
